@@ -27,7 +27,7 @@ model_lr = Pipeline([("scaler", StandardScaler()),
                     ("clf", LogisticRegression(random_state=42))])
 model_lr.fit(X_train, y_train)
 
-model_rf = Pipeline([("clf", RandomForestClassifier(n_estimators= 10, random_state=42))])
+model_rf = Pipeline([("clf", RandomForestClassifier(n_estimators= 100, random_state=42))])
 model_rf.fit(X_train, y_train)
 
 model_svc = Pipeline([("scaler", StandardScaler()),
@@ -39,6 +39,11 @@ print("CROSS VALIDATION: ", scores.mean())
 print("LOGISTIC REGRESSION MODEL")
 y_pred = model_lr.predict(X_test)
 print("Accuracy: ", accuracy_score(y_test, y_pred))
+print("#######")
+print(y_test)
+print("------")
+print(y_pred)
+print("#######")
 print(confusion_matrix(y_test, y_pred))
 print(classification_report(y_test, y_pred))
 
