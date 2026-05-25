@@ -82,7 +82,6 @@ for i, (x, y) in enumerate(stream_transactions()):
     if i % 500 == 0 and i > 0:
         print(f"{i} samples - ROC AUC so far: {metric.get():.4f}")
 
-
 # ---------------------------
 # FINAL RESULT
 # ---------------------------
