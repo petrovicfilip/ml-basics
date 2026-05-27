@@ -860,6 +860,7 @@ class SNARIMAXAnomalyDetector(MapFunction):
 
         errors = {}
         predictions = {}
+        label = rec.get("Label", "")
 
         for target in self.targets:
 
@@ -881,7 +882,9 @@ class SNARIMAXAnomalyDetector(MapFunction):
             self.metrics[target].update(y, prediction)
 
             try:
-                self.models[target].learn_one(y)
+                # za sada ovako, moze na prvih n ako se smatra da su benigni
+                if label == "Benign":
+                    self.models[target].learn_one(y)
             except Exception:
                 pass
         # MAE mean absolute error, prosecna istorijska greska za taj target
@@ -896,14 +899,11 @@ class SNARIMAXAnomalyDetector(MapFunction):
                     # MAE jos nije zagrejana (pocetni koraci), vrati 0
                     normalized_errors.append(0.0)
 
-        anomaly_score = (
-            sum(normalized_errors) / len(normalized_errors)
-            if normalized_errors else 0.0
-        )
+        anomaly_score = max(normalized_errors)
 
         return Row(
             timestamp=rec.get("Timestamp", ""),
-            label=rec.get("Label", ""),
+            label=label,
 
             flow_byts_prediction=predictions.get("Flow Byts/s", 0.0),
             flow_pkts_prediction=predictions.get("Flow Pkts/s", 0.0),
