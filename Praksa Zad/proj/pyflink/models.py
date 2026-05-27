@@ -823,24 +823,31 @@ class SNARIMAXAnomalyDetector(MapFunction):
         self.targets = [
             "Flow Byts/s",
             "Flow Pkts/s",
-            "Pkt Len Mean"
+            "Pkt Len Mean",
+            "Pkt Len Std",
+            "Flow IAT Mean",
+            "Flow IAT Std",
+            "Fwd Pkt Len Mean",
+            "Bwd Pkt Len Mean",
+            "Fwd Pkts/s",
+            "Bwd Pkts/s",
+            "Active Mean",
+            "Idle Mean",
         ]
 
         self.models = {}
-
         for target in self.targets:
             self.models[target] = time_series.SNARIMAX(
-                p=3,
-                d=1,
-                q=2,
-                m=12,
-                sp=1,
-                sd=1,
-                sq=1
+                p=5, # 5 vrednosti unazad
+                d=1, # diferenciram jednom
+                q=2, # 2 prethodne greske
+                m=1, # sezonalnost, nemam??
+                sp=0,
+                sd=0,
+                sq=0
             )
 
         self.metrics = {}
-
         for target in self.targets:
             self.metrics[target] = metrics.MAE()
 
@@ -862,14 +869,12 @@ class SNARIMAXAnomalyDetector(MapFunction):
                 continue
 
             try:
-                prediction = self.models[target].forecast(
-                    horizon=1
-                )[0]
+                # IZMENA 1: klampuj na 0, fizicki ne moze biti negativno
+                prediction = max(0.0, self.models[target].forecast(horizon=1)[0])
             except Exception:
                 prediction = 0.0
 
             error = abs(y - prediction)
-
             predictions[target] = prediction
             errors[target] = error
 
@@ -879,22 +884,53 @@ class SNARIMAXAnomalyDetector(MapFunction):
                 self.models[target].learn_one(y)
             except Exception:
                 pass
+        # MAE mean absolute error, prosecna istorijska greska za taj target
+        # IZMENA 2: normalizovani anomaly score umesto apsolutnog
+        normalized_errors = []
+        for target in self.targets:
+            if target in errors:
+                mae = self.metrics[target].get()
+                if mae > 0:
+                    normalized_errors.append(errors[target] / mae)
+                else:
+                    # MAE jos nije zagrejana (pocetni koraci), vrati 0
+                    normalized_errors.append(0.0)
 
-        mean_error = (
-            sum(errors.values()) / len(errors)
-            if len(errors) > 0 else 0.0
+        anomaly_score = (
+            sum(normalized_errors) / len(normalized_errors)
+            if normalized_errors else 0.0
         )
 
         return Row(
             timestamp=rec.get("Timestamp", ""),
             label=rec.get("Label", ""),
+
             flow_byts_prediction=predictions.get("Flow Byts/s", 0.0),
             flow_pkts_prediction=predictions.get("Flow Pkts/s", 0.0),
             pkt_len_prediction=predictions.get("Pkt Len Mean", 0.0),
             flow_byts_error=errors.get("Flow Byts/s", 0.0),
             flow_pkts_error=errors.get("Flow Pkts/s", 0.0),
             pkt_len_error=errors.get("Pkt Len Mean", 0.0),
-            anomaly_score=mean_error
+
+            pkt_len_std_prediction=predictions.get("Pkt Len Std", 0.0),
+            flow_iat_mean_prediction=predictions.get("Flow IAT Mean", 0.0),
+            flow_iat_std_prediction=predictions.get("Flow IAT Std", 0.0),
+            fwd_pkt_len_mean_prediction=predictions.get("Fwd Pkt Len Mean", 0.0),
+            bwd_pkt_len_mean_prediction=predictions.get("Bwd Pkt Len Mean", 0.0),
+            fwd_pkts_s_prediction=predictions.get("Fwd Pkts/s", 0.0),
+            bwd_pkts_s_prediction=predictions.get("Bwd Pkts/s", 0.0),
+            active_mean_prediction=predictions.get("Active Mean", 0.0),
+            idle_mean_prediction=predictions.get("Idle Mean", 0.0),
+
+            pkt_len_std_error=errors.get("Pkt Len Std", 0.0),
+            flow_iat_mean_error=errors.get("Flow IAT Mean", 0.0),
+            flow_iat_std_error=errors.get("Flow IAT Std", 0.0),
+            fwd_pkt_len_mean_error=errors.get("Fwd Pkt Len Mean", 0.0),
+            bwd_pkt_len_mean_error=errors.get("Bwd Pkt Len Mean", 0.0),
+            fwd_pkts_s_error=errors.get("Fwd Pkts/s", 0.0),
+            bwd_pkts_s_error=errors.get("Bwd Pkts/s", 0.0),
+            active_mean_error=errors.get("Active Mean", 0.0),
+            idle_mean_error=errors.get("Idle Mean", 0.0),
+
+            anomaly_score=anomaly_score
         )
-
-
