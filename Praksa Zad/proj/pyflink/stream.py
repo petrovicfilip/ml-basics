@@ -293,30 +293,30 @@ if __name__ == "__main__":
         output_type=Types.ROW_NAMED(
             [
                 "timestamp", "label",
-                "flow_byts_prediction", "flow_pkts_prediction",
-                "pkt_len_mean_prediction", "pkt_len_std_prediction",
-                "flow_iat_mean_prediction", "fwd_pkt_len_mean_prediction",
-                "bwd_pkt_len_mean_prediction", "fwd_pkts_s_prediction",
-                "bwd_pkts_s_prediction",
-                "flow_byts_error", "flow_pkts_error",
-                "pkt_len_mean_error", "pkt_len_std_error",
-                "flow_iat_mean_error", "fwd_pkt_len_mean_error",
-                "bwd_pkt_len_mean_error", "fwd_pkts_s_error",
-                "bwd_pkts_s_error",
+                "flow_byts_prediction", "flow_pkts_prediction", "pkt_len_prediction",
+                "flow_byts_error", "flow_pkts_error", "pkt_len_error",
+                "pkt_len_std_prediction", "flow_iat_mean_prediction", "flow_iat_std_prediction",
+                "fwd_pkt_len_mean_prediction", "bwd_pkt_len_mean_prediction",
+                "fwd_pkts_s_prediction", "bwd_pkts_s_prediction",
+                "active_mean_prediction", "idle_mean_prediction",
+                "pkt_len_std_error", "flow_iat_mean_error", "flow_iat_std_error",
+                "fwd_pkt_len_mean_error", "bwd_pkt_len_mean_error",
+                "fwd_pkts_s_error", "bwd_pkts_s_error",
+                "active_mean_error", "idle_mean_error",
                 "anomaly_score",
             ],
             [
                 Types.STRING(), Types.STRING(),
+                Types.FLOAT(), Types.FLOAT(), Types.FLOAT(),
+                Types.FLOAT(), Types.FLOAT(), Types.FLOAT(),
+                Types.FLOAT(), Types.FLOAT(), Types.FLOAT(),
                 Types.FLOAT(), Types.FLOAT(),
                 Types.FLOAT(), Types.FLOAT(),
                 Types.FLOAT(), Types.FLOAT(),
-                Types.FLOAT(), Types.FLOAT(),
-                Types.FLOAT(),
-                Types.FLOAT(), Types.FLOAT(),
+                Types.FLOAT(), Types.FLOAT(), Types.FLOAT(),
                 Types.FLOAT(), Types.FLOAT(),
                 Types.FLOAT(), Types.FLOAT(),
                 Types.FLOAT(), Types.FLOAT(),
-                Types.FLOAT(),
                 Types.FLOAT(),
             ],
         ),
@@ -368,22 +368,28 @@ if __name__ == "__main__":
             .column("label", DataTypes.STRING())
             .column("flow_byts_prediction", DataTypes.FLOAT())
             .column("flow_pkts_prediction", DataTypes.FLOAT())
-            .column("pkt_len_mean_prediction", DataTypes.FLOAT())
+            .column("pkt_len_prediction", DataTypes.FLOAT())
+            .column("flow_byts_error", DataTypes.FLOAT())
+            .column("flow_pkts_error", DataTypes.FLOAT())
+            .column("pkt_len_error", DataTypes.FLOAT())
             .column("pkt_len_std_prediction", DataTypes.FLOAT())
             .column("flow_iat_mean_prediction", DataTypes.FLOAT())
+            .column("flow_iat_std_prediction", DataTypes.FLOAT())
             .column("fwd_pkt_len_mean_prediction", DataTypes.FLOAT())
             .column("bwd_pkt_len_mean_prediction", DataTypes.FLOAT())
             .column("fwd_pkts_s_prediction", DataTypes.FLOAT())
             .column("bwd_pkts_s_prediction", DataTypes.FLOAT())
-            .column("flow_byts_error", DataTypes.FLOAT())
-            .column("flow_pkts_error", DataTypes.FLOAT())
-            .column("pkt_len_mean_error", DataTypes.FLOAT())
+            .column("active_mean_prediction", DataTypes.FLOAT())
+            .column("idle_mean_prediction", DataTypes.FLOAT())
             .column("pkt_len_std_error", DataTypes.FLOAT())
             .column("flow_iat_mean_error", DataTypes.FLOAT())
+            .column("flow_iat_std_error", DataTypes.FLOAT())
             .column("fwd_pkt_len_mean_error", DataTypes.FLOAT())
             .column("bwd_pkt_len_mean_error", DataTypes.FLOAT())
             .column("fwd_pkts_s_error", DataTypes.FLOAT())
             .column("bwd_pkts_s_error", DataTypes.FLOAT())
+            .column("active_mean_error", DataTypes.FLOAT())
+            .column("idle_mean_error", DataTypes.FLOAT())
             .column("anomaly_score", DataTypes.FLOAT())
             .build()
         )
