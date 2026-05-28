@@ -1,7 +1,4 @@
-# from models import MLP_SIGRegWithCenterLoss
-# from models import SNARIMAXAnomalyDetector
 from models import KNN
-from models import PADAnomalyDetector
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import (
     TableDescriptor,
@@ -287,46 +284,35 @@ if __name__ == "__main__":
         ),
     )
 
-   # ds.print()
+    # ds.print()
 
-    # stage1_results for multi-class classification
+    # KNN -> multiklasna klasifikacija. Izlaz je klasifikatorski Row
+    # (isti format kao GaussianNB / HoeffdingTree), NE SNARIMAX/PAD format.
     results_ds = ds.map(
-        PADAnomalyDetector(),
+        KNN(),
         output_type=Types.ROW_NAMED(
             [
-                "timestamp", "label",
-                "flow_byts_prediction", "flow_pkts_prediction", "pkt_len_prediction",
-                "flow_byts_error", "flow_pkts_error", "pkt_len_error",
-                "pkt_len_std_prediction", "flow_iat_mean_prediction", "flow_iat_std_prediction",
-                "fwd_pkt_len_mean_prediction", "bwd_pkt_len_mean_prediction",
-                "fwd_pkts_s_prediction", "bwd_pkts_s_prediction",
-                "active_mean_prediction", "idle_mean_prediction",
-                "pkt_len_std_error", "flow_iat_mean_error", "flow_iat_std_error",
-                "fwd_pkt_len_mean_error", "bwd_pkt_len_mean_error",
-                "fwd_pkts_s_error", "bwd_pkts_s_error",
-                "active_mean_error", "idle_mean_error",
-                "anomaly_score",
+                "Timestamp",
+                "orig_label",
+                "binary_label",
+                "predicted_label",
+                "predicted_binary_label",
+                "probability",
+                "class_probabilities",
             ],
             [
-                Types.STRING(), Types.STRING(),
-                Types.FLOAT(), Types.FLOAT(), Types.FLOAT(),
-                Types.FLOAT(), Types.FLOAT(), Types.FLOAT(),
-                Types.FLOAT(), Types.FLOAT(), Types.FLOAT(),
-                Types.FLOAT(), Types.FLOAT(),
-                Types.FLOAT(), Types.FLOAT(),
-                Types.FLOAT(), Types.FLOAT(),
-                Types.FLOAT(), Types.FLOAT(), Types.FLOAT(),
-                Types.FLOAT(), Types.FLOAT(),
-                Types.FLOAT(), Types.FLOAT(),
-                Types.FLOAT(), Types.FLOAT(),
+                Types.STRING(),
+                Types.STRING(),
+                Types.STRING(),
+                Types.STRING(),
+                Types.STRING(),
                 Types.FLOAT(),
+                Types.STRING(),
             ],
         ),
     )
     results_table = t_env.from_data_stream(results_ds)
 
-
-    # results_table_schema = results_table.get_schema()
 
     def table_schema_to_schema(table_schema):
         """
@@ -340,59 +326,19 @@ if __name__ == "__main__":
         return builder
 
 
-    # #binary file sink
-    # t_env.create_temporary_table(
-    #     "file_sink_stage",
-    #     TableDescriptor.for_connector("filesystem")
-    #     .schema(
-    #         Schema.new_builder()
-    #         .column("Timestamp", DataTypes.STRING())
-    #         .column("orig_label", DataTypes.STRING())
-    #         .column("binary_label", DataTypes.STRING())
-    #         .column("predicted_label", DataTypes.STRING())
-    #         .column("predicted_binary_label", DataTypes.STRING())
-    #         .column("probability", DataTypes.FLOAT())
-    #         .column("class_probabilities", DataTypes.STRING())
-    #         .build()
-    #     )
-    #     .option("path", "./output")
-    #     .format(FormatDescriptor.for_format("json").build())
-    #     .build(),
-    # )
-
-    # multi-class file sink
+    # multi-class (klasifikatorski) file sink -> 7 kolona
     t_env.create_temporary_table(
         "file_sink_stage",
         TableDescriptor.for_connector("filesystem")
         .schema(
             Schema.new_builder()
-            .column("timestamp", DataTypes.STRING())
-            .column("label", DataTypes.STRING())
-            .column("flow_byts_prediction", DataTypes.FLOAT())
-            .column("flow_pkts_prediction", DataTypes.FLOAT())
-            .column("pkt_len_prediction", DataTypes.FLOAT())
-            .column("flow_byts_error", DataTypes.FLOAT())
-            .column("flow_pkts_error", DataTypes.FLOAT())
-            .column("pkt_len_error", DataTypes.FLOAT())
-            .column("pkt_len_std_prediction", DataTypes.FLOAT())
-            .column("flow_iat_mean_prediction", DataTypes.FLOAT())
-            .column("flow_iat_std_prediction", DataTypes.FLOAT())
-            .column("fwd_pkt_len_mean_prediction", DataTypes.FLOAT())
-            .column("bwd_pkt_len_mean_prediction", DataTypes.FLOAT())
-            .column("fwd_pkts_s_prediction", DataTypes.FLOAT())
-            .column("bwd_pkts_s_prediction", DataTypes.FLOAT())
-            .column("active_mean_prediction", DataTypes.FLOAT())
-            .column("idle_mean_prediction", DataTypes.FLOAT())
-            .column("pkt_len_std_error", DataTypes.FLOAT())
-            .column("flow_iat_mean_error", DataTypes.FLOAT())
-            .column("flow_iat_std_error", DataTypes.FLOAT())
-            .column("fwd_pkt_len_mean_error", DataTypes.FLOAT())
-            .column("bwd_pkt_len_mean_error", DataTypes.FLOAT())
-            .column("fwd_pkts_s_error", DataTypes.FLOAT())
-            .column("bwd_pkts_s_error", DataTypes.FLOAT())
-            .column("active_mean_error", DataTypes.FLOAT())
-            .column("idle_mean_error", DataTypes.FLOAT())
-            .column("anomaly_score", DataTypes.FLOAT())
+            .column("Timestamp", DataTypes.STRING())
+            .column("orig_label", DataTypes.STRING())
+            .column("binary_label", DataTypes.STRING())
+            .column("predicted_label", DataTypes.STRING())
+            .column("predicted_binary_label", DataTypes.STRING())
+            .column("probability", DataTypes.FLOAT())
+            .column("class_probabilities", DataTypes.STRING())
             .build()
         )
         .option("path", "./output")

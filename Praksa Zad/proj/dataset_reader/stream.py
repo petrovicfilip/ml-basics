@@ -112,13 +112,12 @@ def read_row(row, headers):
         if i < len(headers):
             try:
                 f = float(value)
-                # NaN i Infinity nisu validni JSON → zameni sa None (postaje null)
                 if math.isnan(f) or math.isinf(f):
                     data[headers[i]] = None
                 else:
                     data[headers[i]] = f
             except (ValueError, TypeError):
-                data[headers[i]] = value  # string kolone (Timestamp, Label)
+                data[headers[i]] = value
     return data
 
 
