@@ -1,3 +1,5 @@
+import collections
+import operator
 import random
 
 import torch
@@ -984,8 +986,6 @@ class PADAnomalyDetector(MapFunction):
                 warmup_period=self.warmup_period,
             )
 
-        # zadrzavamo i MAE metriku samo da bi izlaz imao *_error polja
-        # (PAD ne izlaze sirovu gresku, pa je racunamo sami za logovanje)
         self.metrics = {}
         for target in self.targets:
             self.metrics[target] = metrics.MAE()
@@ -1073,16 +1073,89 @@ class PADAnomalyDetector(MapFunction):
             anomaly_score=anomaly_score
         )
 
-class KNN(MapFunction):
-    """
-    K-Nearest Neighbors klasifikator (multiklasni, supervizovani).
-    Za razliku od anomaly modela (HST/LOF/OCSVM/PAD) koji daju samo
-    jedan anomaly score, KNN koristi Label kolonu i predvidja KONKRETAN
-    tip napada (npr. SSH-Bruteforce, DDoS, ...) preko predict_proba_one.
+class BalancedLazySearch(neighbors.LazySearch):
+    """LazySearch sa memorijom balansiranom po klasama.
 
-    Izlaz nosi oba nivoa:
+    Problem originala (vidi lazy.py): jedan globalni FIFO prozor
+        self.window = collections.deque(maxlen=window_size)
+    Kad dugo dolaze samo Benign primeri, taj deque se napuni Benign-om i
+    raniji napadi se izbace -> model skoro uvek predvidja Benign.
+
+    Resenje: umesto jednog deque-a, drzimo PO JEDAN deque po klasi (labeli).
+    Svaki pod-bufer je FIFO velicine W // N:
+        W = window_size (ukupna memorija, ostaje fiksna)
+        N = max_classes  (broj labela)
+    Pravila (tacno po specifikaciji):
+      - novi sample ide samo u deque SVOJE klase (append gleda y iz (x, y));
+      - kad je taj deque pun, deque(maxlen=...) sam izbacuje najstariji
+        element TE klase (FIFO po klasi), ne globalno najstariji;
+      - search() spaja sve pod-bufere i trazi suseda preko svih klasa.
+
+    Menja se SAMO storage. Metode `append` i `search` su jedine pregazene;
+    `update`, `dist_func`, format povratka i sve sto KNNClassifier ocekuje
+    ostaje identicno originalnom lazy.py (isti sorted + zip pristup).
+    """
+
+    def __init__(
+        self,
+        window_size: int = 50,
+        max_classes: int = 2,
+        min_distance_keep: float = 0.0,
+        dist_func=None,
+    ):
+        # parent postavlja window_size, min_distance_keep, dist_func, i
+        # self.window = deque(); window setter ispod neutralizuje taj deque.
+        super().__init__(
+            window_size=window_size,
+            min_distance_keep=min_distance_keep,
+            dist_func=dist_func,
+        )
+        self.max_classes = max_classes
+        # bar 1 mesto po klasi cak i ako je N > W
+        self.per_class_size = max(1, window_size // max_classes)
+        # label -> deque(maxlen=per_class_size)
+        self._buffers: dict = {}
+
+    @property
+    def window(self):
+        # KNNClassifier.clean_up_classes() prolazi kroz self.window.
+        # Izlozimo sve pod-bufere kao jednu spojenu listu (citanje).
+        merged = collections.deque()
+        for buf in self._buffers.values():
+            merged.extend(buf)
+        return merged
+
+    @window.setter
+    def window(self, value):
+        # Nasledjeni __init__ radi self.window = deque(maxlen=W). Mi ne
+        # koristimo globalni prozor (drzimo _buffers), pa to progutamo.
+        pass
+
+    def append(self, item, extra=None, **kwargs):
+        # item je (x, y) -> klasa je y. Za upit (x, None) se ne poziva append.
+        label = item[1]
+        if label not in self._buffers:
+            self._buffers[label] = collections.deque(maxlen=self.per_class_size)
+        # FIFO po klasi: deque sa maxlen sam izbaci najstariji kad je pun
+        self._buffers[label].append((item, *(extra or [])))
+
+    def search(self, item, n_neighbors, **kwargs):
+        # Identicna logika kao original lazy.py, samo nad spojem pod-bufera
+        # umesto nad jednim self.window deque-om.
+        points = (
+            (*p, self.dist_func(item, p[0]))
+            for buf in self._buffers.values()
+            for p in buf
+        )
+        return tuple(
+            map(list, zip(*sorted(points, key=operator.itemgetter(-1))[:n_neighbors]))
+        )
+
+
+class KNN(MapFunction):
+    """.
       - predicted_label        -> tacan tip (multiklasno)
-      - predicted_binary_label -> Attack/Benign (binarno, izvedeno iz tipa)
+      - predicted_binary_label -> Attack/Benign
     """
 
     def open(self, runtime_context: RuntimeContext):
@@ -1092,16 +1165,30 @@ class KNN(MapFunction):
 
         # LazySearch = egzaktni engine sa kliznim prozorom (FIFO).
         # window_size = koliko poslednjih instanci se pamti za pretragu suseda.
-        # Veci prozor = bolja pokrivenost retkih klasa napada, vise memorije.
+        #
+        # BalancedLazySearch deli prozor na jednake pod-bufere PO KLASI, da
+        # dug Benign burst ne bi izgurao napade iz memorije. Uz 16 labela i
+        # window_size=1600, svaka klasa drzi 1600 // 16 = 100 primera.
+        self.num_classes = 16  # broj labela u CICIDS
         self.model = neighbors.KNNClassifier(
             n_neighbors=5,
-            engine=neighbors.LazySearch(window_size=1000),
+            engine=BalancedLazySearch(
+                window_size=400,
+                max_classes=self.num_classes,
+            ),
             weighted=True,  # blizi susedi imaju vecu tezinu u glasanju
             cleanup_every=0,  # 0 = nikad ne izbacuj stare klase iz rezultata
         )
 
         self.model_save_num = 1000000
         self.counter = 1
+
+        # --- brojanje tacnosti svakih 1000 poruka ---
+        self.report_every = 1000   # na koliko poruka ispisujemo
+        self.total_seen = 0        # ukupno validnih predikcija (bez warmup/None)
+        self.total_correct = 0     # ukupno pogodjenih (kumulativno)
+        self.window_seen = 0       # u tekucem prozoru od 1000
+        self.window_correct = 0    # pogodjenih u tekucem prozoru
 
     def _row_to_features(self, value):
         try:
@@ -1165,8 +1252,31 @@ class KNN(MapFunction):
             predicted_binary_class = "None"
             probability = -1
 
+        # --- prequential tacnost: meri se PRE ucenja (test-then-train) ---
+        # broji samo validne predikcije (preskace warmup 'None' i nevalidne)
+        if predicted_class not in ("None", "-1") and label_orig is not None:
+            hit = 1 if predicted_class == label_orig else 0
+            self.total_seen += 1
+            self.total_correct += hit
+            self.window_seen += 1
+            self.window_correct += hit
+
+            # ispis svakih report_every validnih poruka
+            if self.window_seen >= self.report_every:
+                win_acc = 100.0 * self.window_correct / self.window_seen
+                tot_acc = 100.0 * self.total_correct / self.total_seen
+                print(
+                    f"[KNN] poslednjih {self.window_seen}: "
+                    f"{self.window_correct}/{self.window_seen} = {win_acc:.2f}%  |  "
+                    f"ukupno: {self.total_correct}/{self.total_seen} = {tot_acc:.2f}%",
+                    flush=True,
+                )
+                # resetuj prozor
+                self.window_seen = 0
+                self.window_correct = 0
+
         try:
-            # supervizovano: ucimo sa pravom labelom (i Benign i napadi)
+            # ucenje
             self.model.learn_one(x, label_orig)
         except Exception as e:
             print(e)

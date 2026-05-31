@@ -341,7 +341,7 @@ if __name__ == "__main__":
             .column("class_probabilities", DataTypes.STRING())
             .build()
         )
-        .option("path", "./output")
+        .option("path", "file:///D:/output")
         .format(FormatDescriptor.for_format("json").build())
         .build(),
     )
