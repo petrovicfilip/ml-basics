@@ -3,6 +3,8 @@ import operator
 import random
 import os
 
+from metrics_eval import PrequentialEvaluator
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -1183,13 +1185,19 @@ class KNN(MapFunction):
         self.model_save_num = 1000000
         self.counter = 1
 
-        # --- brojanje tacnosti svakih 1000 poruka ---
-        self.report_every = 1000   # na koliko poruka ispisujemo/logujemo
+        # --- brojanje tacnosti svakih 1000 poruka (procenat pogodjenih) ---
+        self.report_every = 1000   # na koliko poruka ispisujemo/logujemo procenat
         self.total_seen = 0        # ukupno validnih predikcija
         self.total_correct = 0     # ukupno pogodjenih
         self.window_seen = 0       # u tekucem prozoru od 1000
         self.window_correct = 0    # pogodjenih u tekucem prozoru
-        self.log_path = "D:/logs.txt"  # fajl za logove (kreira se ako ne postoji)
+        self.log_path = "D:/logs.txt"  # fajl za procenat (kreira se ako ne postoji)
+
+        # --- pune metrike svakih 100000 (izdvojeno u metrics_eval.py) ---
+        self.metrics_every = 100000          # na koliko redova ispisujemo pun izvestaj
+        self.metrics_counter = 0
+        self.evaluator = PrequentialEvaluator(rolling_window=50000)
+        self.metrics_path = "D:/metrics.txt"  # fajl za pune metrike
 
     def _row_to_features(self, value):
         try:
@@ -1280,6 +1288,21 @@ class KNN(MapFunction):
                 # resetuj prozor
                 self.window_seen = 0
                 self.window_correct = 0
+
+        # --- pune metrike: azuriraj evaluator PRE ucenja (test-then-train) ---
+        # evaluator sam preskace warmup 'None'/nevalidne '-1'
+        self.evaluator.update(label_orig, predicted_class)
+        self.metrics_counter += 1
+
+        # svakih metrics_every redova: pun izvestaj u konzolu + u D:/metrics.txt
+        if self.metrics_counter % self.metrics_every == 0:
+            report = self.evaluator.full_report()
+            print(report, flush=True)
+            try:
+                with open(self.metrics_path, "a", encoding="utf-8") as mf:
+                    mf.write(report + "\n")
+            except Exception as e:
+                print("metrics write error:", e)
 
         try:
             # ucenje
