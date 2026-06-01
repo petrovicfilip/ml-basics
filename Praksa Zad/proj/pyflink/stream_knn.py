@@ -286,8 +286,7 @@ if __name__ == "__main__":
 
     # ds.print()
 
-    # KNN -> multiklasna klasifikacija. Izlaz je klasifikatorski Row
-    # (isti format kao GaussianNB / HoeffdingTree), NE SNARIMAX/PAD format.
+    # KNN multiclass
     results_ds = ds.map(
         KNN(),
         output_type=Types.ROW_NAMED(

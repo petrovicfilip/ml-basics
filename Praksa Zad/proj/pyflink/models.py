@@ -1,6 +1,7 @@
 import collections
 import operator
 import random
+import os
 
 import torch
 import torch.nn as nn
@@ -1141,7 +1142,6 @@ class BalancedLazySearch(neighbors.LazySearch):
 
     def search(self, item, n_neighbors, **kwargs):
         # Identicna logika kao original lazy.py, samo nad spojem pod-bufera
-        # umesto nad jednim self.window deque-om.
         points = (
             (*p, self.dist_func(item, p[0]))
             for buf in self._buffers.values()
@@ -1184,11 +1184,12 @@ class KNN(MapFunction):
         self.counter = 1
 
         # --- brojanje tacnosti svakih 1000 poruka ---
-        self.report_every = 1000   # na koliko poruka ispisujemo
-        self.total_seen = 0        # ukupno validnih predikcija (bez warmup/None)
-        self.total_correct = 0     # ukupno pogodjenih (kumulativno)
+        self.report_every = 1000   # na koliko poruka ispisujemo/logujemo
+        self.total_seen = 0        # ukupno validnih predikcija
+        self.total_correct = 0     # ukupno pogodjenih
         self.window_seen = 0       # u tekucem prozoru od 1000
         self.window_correct = 0    # pogodjenih u tekucem prozoru
+        self.log_path = "D:/logs.txt"  # fajl za logove (kreira se ako ne postoji)
 
     def _row_to_features(self, value):
         try:
@@ -1207,9 +1208,10 @@ class KNN(MapFunction):
 
     def map(self, value):
         if self.counter % self.model_save_num == 0:
-            with open("./backup/knn.pkl", "wb") as f:
+            os.makedirs("D:/backup", exist_ok=True)  # napravi folder ako ne postoji
+            with open("D:/backup/knn.pkl", "wb") as f:
                 pickle.dump(self.model, f)
-            with open("./backup/knn_scaler.pkl", "wb") as f:
+            with open("D:/backup/knn_scaler.pkl", "wb") as f:
                 pickle.dump(self.scaler, f)
             self.counter = 0
         self.counter += 1
@@ -1241,7 +1243,6 @@ class KNN(MapFunction):
                     "Attack" if predicted_class != "Benign" else "Benign"
                 )
             else:
-                # prvi redovi: model jos nema nijednu naucenu instancu
                 predicted_class = "None"
                 predicted_binary_class = "None"
                 probability = -1
@@ -1252,7 +1253,6 @@ class KNN(MapFunction):
             predicted_binary_class = "None"
             probability = -1
 
-        # --- prequential tacnost: meri se PRE ucenja (test-then-train) ---
         # broji samo validne predikcije (preskace warmup 'None' i nevalidne)
         if predicted_class not in ("None", "-1") and label_orig is not None:
             hit = 1 if predicted_class == label_orig else 0
@@ -1261,16 +1261,22 @@ class KNN(MapFunction):
             self.window_seen += 1
             self.window_correct += hit
 
-            # ispis svakih report_every validnih poruka
+            # svakih report_every validnih poruka: ispis u konzolu + u fajl
             if self.window_seen >= self.report_every:
                 win_acc = 100.0 * self.window_correct / self.window_seen
                 tot_acc = 100.0 * self.total_correct / self.total_seen
-                print(
+                line = (
                     f"[KNN] poslednjih {self.window_seen}: "
                     f"{self.window_correct}/{self.window_seen} = {win_acc:.2f}%  |  "
-                    f"ukupno: {self.total_correct}/{self.total_seen} = {tot_acc:.2f}%",
-                    flush=True,
+                    f"ukupno: {self.total_correct}/{self.total_seen} = {tot_acc:.2f}%"
                 )
+                print(line, flush=True)
+                # dopisi u log fajl; "a" mod sam kreira fajl ako ne postoji
+                try:
+                    with open(self.log_path, "a", encoding="utf-8") as logf:
+                        logf.write(line + "\n")
+                except Exception as e:
+                    print("log write error:", e)
                 # resetuj prozor
                 self.window_seen = 0
                 self.window_correct = 0
