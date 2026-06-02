@@ -37,29 +37,21 @@ class PrequentialEvaluator:
         self.ignore_labels = set(ignore_labels)
 
         # --- GLOBALNE (kumulativne) metrike ---
-        # Accuracy: udeo tacnih. Mana kod neuravnotezenih klasa: visok i kad
-        # model uvek pogadja vecinsku klasu (Benign). Zato NIJE dovoljna sama.
         self.accuracy = metrics.Accuracy()
 
         # BalancedAccuracy: prosek recall-a po klasama -> kaznjava ignorisanje
         # retkih klasa napada. Kljucna metrika za imbalanced IDS.
         self.balanced_accuracy = metrics.BalancedAccuracy()
 
-        # Macro F1: prosek F1 po klasama, sve klase jednako vazne (retke kao i
-        # ceste). Micro F1: globalno po slogovima (dominira vecinska klasa).
-        # Weighted F1: prosek tezinski po support-u. Dajemo sve tri za poredjenje.
         self.macro_f1 = metrics.MacroF1()
         self.micro_f1 = metrics.MicroF1()
         self.weighted_f1 = metrics.WeightedF1()
 
-        # Macro precision/recall odvojeno (da vidimo lazne uzbune vs promaseni napadi)
+        # Macro precision/recall
         self.macro_precision = metrics.MacroPrecision()
         self.macro_recall = metrics.MacroRecall()
 
-        # CohenKappa: slaganje iznad slucajnog pogadjanja. Korisno kad je
-        # raspodela klasa jako neravnomerna. NAPOMENA: River-ov MCC u multiklasnom
-        # slucaju nije pouzdan (vraca 0.0 i za savrsene predikcije), a istrazivanja
-        # pokazuju da se MCC i Kappa u multiklasi gotovo poklapaju -> koristimo Kappa.
+        # CohenKappa
         self.cohen_kappa = metrics.CohenKappa()
 
         # GeometricMean: koren proizvoda recall-a po klasama -> ako ijedna klasa
@@ -67,15 +59,11 @@ class PrequentialEvaluator:
         self.geometric_mean = metrics.GeometricMean()
 
         # --- PER-CLASS sve odjednom: Precision/Recall/F1/Support po klasi +
-        #     Macro/Micro/Weighted + accuracy. Glavni izvor per-class brojeva. ---
         self.report = metrics.ClassificationReport()
 
-        # --- Confusion matrix: ko se sa kim brka (npr. DDoS <-> Benign) ---
         self.confusion = metrics.ConfusionMatrix()
 
         # --- ROLLING (prozorske) verzije kljucnih metrika ---
-        # Pokazuju trenutni trend umesto kumulativnog proseka. Vazno jer u IDS
-        # stream-u dolaze burst-ovi: kumulativ "razvodni" lokalni pad tacnosti.
         self.rolling_window = rolling_window
         self.roll_accuracy = utils.Rolling(metrics.Accuracy(), window_size=rolling_window)
         self.roll_macro_f1 = utils.Rolling(metrics.MacroF1(), window_size=rolling_window)
@@ -83,7 +71,6 @@ class PrequentialEvaluator:
             metrics.BalancedAccuracy(), window_size=rolling_window
         )
 
-        # broj validnih (ne-ignorisanih) uzoraka koje smo evaluirali
         self.n_evaluated = 0
         # broj preskocenih (warmup/nevalidnih)
         self.n_skipped = 0
@@ -118,7 +105,6 @@ class PrequentialEvaluator:
         return True
 
     def global_summary(self) -> str:
-        """Kratak jednoredni pregled globalnih metrika (za cest ispis)."""
         return (
             f"n={self.n_evaluated} "
             f"acc={self.accuracy.get() * 100:.2f}% "

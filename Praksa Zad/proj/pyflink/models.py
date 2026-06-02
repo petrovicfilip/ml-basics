@@ -1161,16 +1161,7 @@ class KNN(MapFunction):
     """
 
     def open(self, runtime_context: RuntimeContext):
-        # KNN racuna rastojanja -> skaliranje je OBAVEZNO, inace par kolona
-        # sa velikim opsegom (npr. Flow Byts/s) dominira nad svim ostalim.
         self.scaler = preprocessing.StandardScaler()
-
-        # LazySearch = egzaktni engine sa kliznim prozorom (FIFO).
-        # window_size = koliko poslednjih instanci se pamti za pretragu suseda.
-        #
-        # BalancedLazySearch deli prozor na jednake pod-bufere PO KLASI, da
-        # dug Benign burst ne bi izgurao napade iz memorije. Uz 16 labela i
-        # window_size=1600, svaka klasa drzi 1600 // 16 = 100 primera.
         self.num_classes = 16  # broj labela u CICIDS
         self.model = neighbors.KNNClassifier(
             n_neighbors=5,
@@ -1289,7 +1280,7 @@ class KNN(MapFunction):
                 self.window_seen = 0
                 self.window_correct = 0
 
-        # --- pune metrike: azuriraj evaluator PRE ucenja (test-then-train) ---
+        # --- pune metrike (test-then-train) ---
         # evaluator sam preskace warmup 'None'/nevalidne '-1'
         self.evaluator.update(label_orig, predicted_class)
         self.metrics_counter += 1
