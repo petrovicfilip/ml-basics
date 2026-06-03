@@ -1,5 +1,20 @@
-# from models import KNN
-from models import LocalOutlierFactor
+from models import (
+    KNN,
+    LocalOutlierFactor,
+    GaussianNaiveBayes,
+    AdaptiveHoeffdingTree,
+    AdaptiveRandomForest,
+    AggregatedMondrianForest,
+    SoftmaxRegression,
+    HoeffdingTree,
+    HalfSpaceTrees,
+    OCSVM,
+    OCSVM_RBF,
+)
+
+MODEL = LocalOutlierFactor
+
+OUTPUT_PATH = "file:///D:/output_" + MODEL.__name__
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import (
     TableDescriptor,
@@ -289,7 +304,7 @@ if __name__ == "__main__":
 
     # KNN multiclass
     results_ds = ds.map(
-        LocalOutlierFactor(), # izmeniti pri promeni modela
+        MODEL(),  # instancira izabrani model (vidi MODEL gore)
         output_type=Types.ROW_NAMED(
             [
                 "Timestamp",
@@ -341,7 +356,7 @@ if __name__ == "__main__":
             .column("class_probabilities", DataTypes.STRING())
             .build()
         )
-        .option("path", "file:///D:/output")
+        .option("path", OUTPUT_PATH)
         .format(FormatDescriptor.for_format("json").build())
         .build(),
     )
