@@ -1,4 +1,5 @@
-from models import KNN
+# from models import KNN
+from models import LocalOutlierFactor
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import (
     TableDescriptor,
@@ -288,7 +289,7 @@ if __name__ == "__main__":
 
     # KNN multiclass
     results_ds = ds.map(
-        KNN(),
+        LocalOutlierFactor(), # izmeniti pri promeni modela
         output_type=Types.ROW_NAMED(
             [
                 "Timestamp",
