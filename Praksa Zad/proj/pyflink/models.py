@@ -33,6 +33,8 @@ from river import (
     feature_extraction
 )
 
+from river import anomaly
+
 
 class GaussianNaiveBayes(MapFunction):
     def open(self, runtime_context: RuntimeContext):
@@ -592,12 +594,13 @@ class HalfSpaceTrees(MapFunction):
 class LocalOutlierFactor(MapFunction):
     def open(self, runtime_context: RuntimeContext):
         self.scaler = preprocessing.StandardScaler()
-        self.model = WindowedLOF(
-            n_neighbors=10,
-            window_size=2000,
-            rebuild_every=1000,
-            min_dist=1e-9,
-        )
+        # self.model = WindowedLOF(
+        #     n_neighbors=10,
+        #     window_size=2000,
+        #     rebuild_every=1000,
+        #     min_dist=1e-9,
+        # )
+        self.model = anomaly.LocalOutlierFactor(n_neighbors=10, window_size=2000, min_dist=1e-9)
         self.model_save_num = 1000000
         self.counter = 1
 
