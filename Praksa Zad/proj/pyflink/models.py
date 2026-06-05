@@ -34,7 +34,7 @@ from river import (
 )
 
 from river import anomaly
-
+from lof import LocalOutlierFactor as lof
 
 class GaussianNaiveBayes(MapFunction):
     def open(self, runtime_context: RuntimeContext):
@@ -600,7 +600,7 @@ class LocalOutlierFactor(MapFunction):
         #     rebuild_every=1000,
         #     min_dist=1e-9,
         # )
-        self.model = anomaly.LocalOutlierFactor(n_neighbors=10, window_size=2000, min_dist=1e-9)
+        self.model = lof(n_neighbors=10, window_size=2000, min_dist=1e-9)
         self.model_save_num = 1000000
         self.counter = 1
 
